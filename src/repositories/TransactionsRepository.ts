@@ -3,45 +3,42 @@ import { EntityRepository, Repository } from 'typeorm';
 import Transaction from '../models/Transaction';
 
 interface Balance {
-  income: number;
-  outcome: number;
-  total: number;
+    income: number;
+    outcome: number;
+    total: number;
 }
 
 @EntityRepository(Transaction)
 class TransactionsRepository extends Repository<Transaction> {
-  public async getBalance(): Promise<Balance> {
-    const transactions = await this.find();
+    public async getBalance(): Promise<Balance> {
+        const transactions = await this.find();
 
-    const { income, outcome } = transactions.reduce(
-      (accumulator: Balance, transaction: Transaction) => {
-        switch (transaction.type) {
-          case 'income':
-            accumulator.income += Number(transaction.value);
-            break;
-          case 'outcome':
-            accumulator.outcome += Number(transaction.value);
-            break;
-          default:
-            break;
-        }
-        return accumulator;
-      },
-      {
-        income: 0,
-        outcome: 0,
-        total: 0,
-      },
-    );
+        const balance = transactions.reduce(
+            (accumulator, transaction) => {
+                switch (transaction.type) {
+                    case 'income':
+                        accumulator.income += transaction.value;
+                        break;
+                    case 'outcome':
+                        accumulator.outcome += transaction.value;
+                        break;
+                    default:
+                        break;
+                }
 
-    const total = income - outcome;
+                accumulator.total = accumulator.income - accumulator.outcome;
 
-    return {
-      income,
-      outcome,
-      total,
-    };
-  }
+                return accumulator;
+            },
+            {
+                income: 0,
+                outcome: 0,
+                total: 0,
+            },
+        );
+
+        return balance;
+    }
 }
 
 export default TransactionsRepository;

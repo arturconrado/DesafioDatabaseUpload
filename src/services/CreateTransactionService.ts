@@ -1,64 +1,76 @@
-// import AppError from '../errors/AppError';
-
 import { getRepository, getCustomRepository } from 'typeorm';
+
+import AppError from '../errors/AppError';
 import Transaction from '../models/Transaction';
 import Category from '../models/Category';
-import TransactionsRepository from '../repositories/TransactionsRepository';
-import AppError from '../errors/AppError';
+
+import TransactionRepository from '../repositories/TransactionsRepository';
 
 interface Request {
-    title: string;
-    value: number;
-    type: 'income' | 'outcome';
-    category: string;
+  title: string;
+  value: number;
+  type: 'income' | 'outcome';
+  category: string;
 }
+
 class CreateTransactionService {
-    public async execute({
-        title,
-        value,
-        type,
-        category,
-    }: Request): Promise<Transaction> {
-        const categoryRepository = getRepository(Category);
-        const transactionsRepository = getCustomRepository(
-            TransactionsRepository,
-        );
+  public async execute({
+    title,
+    type,
+    value,
+    category,
+  }: Request): Promise<Transaction> {
+    const categoriesRepository = getRepository(Category);
+    const transactionRepository = getCustomRepository(TransactionRepository);
 
-        const balance = await transactionsRepository.getBalance();
-
-        if (type === 'outcome' && value > balance.total) {
-            throw new AppError('Insufficient balance');
-        }
-
-        const categoryExits = await categoryRepository.findOne({
-            where: { title: category },
-        });
-
-        let category_id = '';
-
-        if (categoryExits) {
-            category_id = categoryExits.id;
-        } else {
-            const newCategory = categoryRepository.create({
-                title: category,
-            });
-
-            await categoryRepository.save(newCategory);
-
-            category_id = newCategory.id;
-        }
-
-        const transaction = transactionsRepository.create({
-            title,
-            value,
-            type,
-            category_id,
-        });
-
-        await transactionsRepository.save(transaction);
-
-        return transaction;
+    if (type !== 'income' && type !== 'outcome') {
+      throw new AppError('Type not permited');
     }
+
+    if (type === 'outcome') {
+      const balance = await transactionRepository.getBalance();
+
+      if (value > balance.total) {
+        throw new AppError(
+          'Invalid create outcome transaction without a valid balance',
+        );
+      }
+    }
+
+    const checkCategoryExist = await categoriesRepository.findOne({
+      where: { title: category },
+    });
+
+    if (!checkCategoryExist) {
+      const createCategory = categoriesRepository.create({
+        title: category,
+      });
+
+      await categoriesRepository.save(createCategory);
+
+      const transaction = transactionRepository.create({
+        title,
+        type,
+        value,
+        category_id: createCategory.id,
+      });
+
+      await transactionRepository.save(transaction);
+
+      return transaction;
+    }
+
+    const transaction = transactionRepository.create({
+      title,
+      type,
+      value,
+      category_id: checkCategoryExist.id,
+    });
+
+    await transactionRepository.save(transaction);
+
+    return transaction;
+  }
 }
 
 export default CreateTransactionService;

@@ -1,8 +1,10 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
-export default class CreateTransactions1598647235602
+export default class CreateTransactions1598896953171
   implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
     await queryRunner.createTable(
       new Table({
         name: 'transactions',
@@ -20,9 +22,7 @@ export default class CreateTransactions1598647235602
           },
           {
             name: 'value',
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
+            type: 'integer',
           },
           {
             name: 'type',

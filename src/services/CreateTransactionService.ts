@@ -1,10 +1,9 @@
-import { getRepository, getCustomRepository } from 'typeorm';
+import { getCustomRepository } from 'typeorm';
 
 import AppError from '../errors/AppError';
 import Transaction from '../models/Transaction';
-import Category from '../models/Category';
-
-import TransactionRepository from '../repositories/TransactionsRepository';
+import TransactionsRepository from '../repositories/TransactionsRepository';
+import CategoriesRepository from '../repositories/CategoriesRepository';
 
 interface Request {
   title: string;
@@ -16,58 +15,49 @@ interface Request {
 class CreateTransactionService {
   public async execute({
     title,
-    type,
     value,
+    type,
     category,
   }: Request): Promise<Transaction> {
-    const categoriesRepository = getRepository(Category);
-    const transactionRepository = getCustomRepository(TransactionRepository);
-
-    if (type !== 'income' && type !== 'outcome') {
-      throw new AppError('Type not permited');
+    if (!['income', 'outcome'].includes(type)) {
+      throw new AppError('Invalid transaction type');
     }
 
-    if (type === 'outcome') {
-      const balance = await transactionRepository.getBalance();
+    const transactionsRepository = getCustomRepository(TransactionsRepository);
 
-      if (value > balance.total) {
-        throw new AppError(
-          'Invalid create outcome transaction without a valid balance',
-        );
-      }
+    const { total } = await transactionsRepository.getBalance();
+
+    if (type === 'outcome' && total < value) {
+      throw new AppError('Outgoing transaction cannot exceed total available');
     }
 
-    const checkCategoryExist = await categoriesRepository.findOne({
+    const categoriesRepository = getCustomRepository(CategoriesRepository);
+    let categoryId: string;
+
+    const findCategoryWithSameTitle = await categoriesRepository.findOne({
       where: { title: category },
     });
 
-    if (!checkCategoryExist) {
-      const createCategory = categoriesRepository.create({
+    if (findCategoryWithSameTitle) {
+      categoryId = findCategoryWithSameTitle.id;
+    } else {
+      const newCategory = categoriesRepository.create({
         title: category,
       });
 
-      await categoriesRepository.save(createCategory);
+      await categoriesRepository.save(newCategory);
 
-      const transaction = transactionRepository.create({
-        title,
-        type,
-        value,
-        category_id: createCategory.id,
-      });
-
-      await transactionRepository.save(transaction);
-
-      return transaction;
+      categoryId = newCategory.id;
     }
 
-    const transaction = transactionRepository.create({
+    const transaction = transactionsRepository.create({
       title,
-      type,
       value,
-      category_id: checkCategoryExist.id,
+      type,
+      category_id: categoryId,
     });
 
-    await transactionRepository.save(transaction);
+    await transactionsRepository.save(transaction);
 
     return transaction;
   }
